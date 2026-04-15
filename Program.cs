@@ -1,43 +1,26 @@
-using System.Text;
 using backend.Data;
-using backend.Services;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Services
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Global CORS mapping for Angular host
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAngularDev", policy =>
-    {
-        policy.WithOrigins("http://localhost:4200")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
-    });
-});
-
-// Configure Entity Framework Core with PostgreSQL
+// DB
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Dependency Injection setup
-builder.Services.AddScoped<IJwtService, JwtService>();
-builder.Services.AddScoped<IUserService, UserService>();
-builder.Services.AddScoped<IOrganizationService, OrganizationService>();
-builder.Services.AddScoped<IProjectService, ProjectService>();
-builder.Services.AddScoped<ITaskService, TaskService>();
-builder.Services.AddScoped<IDashboardService, DashboardService>();
-
-// Configure JWT Authentication
-var jwtSettings = builder.Configuration.GetSection("Jwt");
-var secretKey = jwtSettings["Key"] ?? "super_secret_key_change_me_in_production_run";
+// JWT
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrEmpty(jwtKey))
+{
+    throw new Exception("JWT Key is missing");
+}
 
 builder.Services.AddAuthentication(options =>
 {
@@ -52,35 +35,40 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidAudience = jwtSettings["Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        ValidAudience = builder.Configuration["Jwt:Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
     };
+});
+
+// CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader());
 });
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+app.UseCors("AllowAll");
 
-// Bypass browser strict-redirect to prevent SSL termination loops
-// app.UseHttpsRedirection();
-
-// Use CORS map
-app.UseCors("AllowAngularDev");
-
-// Add Authentication and Authorization pipelines
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Root route
+app.MapGet("/", () => "ManagePro Backend is Running 🚀");
+
 app.MapControllers();
 
-// Seed the database
-await SeedData.InitializeAsync(app.Services);
+// Seed
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    SeedData.InitializeAsync(services).Wait();
+}
 
-var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+// Port
+var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 app.Run($"http://0.0.0.0:{port}");
