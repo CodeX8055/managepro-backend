@@ -1,0 +1,4 @@
+Reg OK
+Login OK
+Task Err: {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"request":["The request field is required."],"$.projectId":["The JSON value could not be converted to System.Guid. Path: $.projectId | LineNumber: 3 | BytePositionInLine: 23."]},"traceId":"00-a289b38f11dd2486088ff76800439ebf-c3df4b24d9ceb07d-00"}
+
