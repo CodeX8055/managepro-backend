@@ -60,21 +60,20 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 //
-// PIPELINE ORDER (VERY IMPORTANT)
-//
-app.UseCors("AllowFrontend");
-
-app.UseAuthentication();
-app.UseAuthorization();
-
-//
-// SWAGGER ONLY IN DEVELOPMENT
+// IMPORTANT: MIDDLEWARE ORDER FIX
 //
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseRouting();
+
+app.UseCors("AllowFrontend");
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 //
 // TEST ROUTE
@@ -88,11 +87,9 @@ app.MapControllers();
 //
 try
 {
-    using (var scope = app.Services.CreateScope())
-    {
-        var services = scope.ServiceProvider;
-        await SeedData.InitializeAsync(services);
-    }
+    using var scope = app.Services.CreateScope();
+    var services = scope.ServiceProvider;
+    await SeedData.InitializeAsync(services);
 }
 catch (Exception ex)
 {
@@ -100,7 +97,7 @@ catch (Exception ex)
 }
 
 //
-// RENDER PORT FIX (CRITICAL)
+// RENDER PORT FIX (IMPORTANT)
 //
 var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 app.Run($"http://0.0.0.0:{port}");
