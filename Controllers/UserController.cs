@@ -1,126 +1,176 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using backend.Data;
 using backend.Models;
 using backend.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace backend.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class AuthController : ControllerBase
+    [Authorize]
+    public class UserController : ControllerBase
     {
-        private readonly AppDbContext _context;
-        private readonly IJwtService _jwtService;
-        private readonly IUserService _userService;
-        private readonly IOrganizationService _orgService;
+        private readonly IUserService _service;
 
-        public AuthController(
-            AppDbContext context,
-            IJwtService jwtService,
-            IUserService userService,
-            IOrganizationService orgService)
+        public UserController(IUserService service)
         {
-            _context = context;
-            _jwtService = jwtService;
-            _userService = userService;
-            _orgService = orgService;
+            _service = service;
         }
 
-        // ---------------- LOGIN ----------------
-        [HttpPost("login")]
-        [AllowAnonymous]
-        public async Task<IActionResult> Login([FromBody] LoginRequest request)
+        // ================= GET ALL USERS =================
+        [HttpGet]
+        public async Task<IActionResult> GetAll()
         {
-            if (request == null)
-                return BadRequest(new { message = "Request is empty" });
+            var orgIdClaim = User.Claims
+                .FirstOrDefault(c =>
+                    c.Type == "OrganizationId" ||
+                    c.Type.EndsWith("/OrganizationId"))
+                ?.Value;
 
-            var email = request.Username?.Trim().ToLower();
+            Guid? orgId = Guid.TryParse(orgIdClaim, out var parsed) ? parsed : null;
 
-            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(request.Password))
-                return BadRequest(new { message = "Email/password required" });
-
-            var user = await _context.Users
-                .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Email.ToLower() == email);
-
-            if (user == null)
-                return Unauthorized(new { message = "Invalid credentials" });
-
-            if (string.IsNullOrEmpty(user.PasswordHash))
-                return Unauthorized(new { message = "Invalid credentials" });
-
-            var isValid = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
-
-            if (!isValid)
-                return Unauthorized(new { message = "Invalid credentials" });
-
-            var token = _jwtService.GenerateToken(user, user.Role?.Name ?? "");
-
-            return Ok(new AuthResponse
-            {
-                Token = token,
-                Username = user.Username,
-                Role = user.Role?.Name ?? "",
-                OrganizationId = user.OrganizationId
-            });
+            var users = await _service.GetAllByOrgAsync(orgId);
+            return Ok(users);
         }
 
-        // ---------------- REGISTER ORGANIZATION ----------------
-        [HttpPost("register-organization")]
-        [AllowAnonymous]
-        public async Task<IActionResult> RegisterOrganization([FromBody] RegisterOrganizationRequest request)
+        // ================= CREATE USER =================
+        [HttpPost]
+        [Authorize(Roles = "SuperAdmin,OrgAdmin")]
+        public async Task<IActionResult> Create([FromBody] CreateUserDto dto)
         {
-            if (request == null)
-                return BadRequest(new { message = "Request is null" });
+            if (dto == null)
+                return BadRequest(new { message = "Invalid request" });
 
-            var orgName = request.OrganizationName?.Trim();
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
 
-            if (string.IsNullOrEmpty(orgName) ||
-                string.IsNullOrEmpty(request.AdminEmail) ||
-                string.IsNullOrEmpty(request.AdminUsername) ||
-                string.IsNullOrEmpty(request.AdminPassword))
+            var orgIdClaim = User.Claims
+                .FirstOrDefault(c =>
+                    c.Type == "OrganizationId" ||
+                    c.Type.EndsWith("/OrganizationId"))
+                ?.Value;
+
+            if (userRole == "OrgAdmin")
             {
-                return BadRequest(new { message = "All fields required" });
+                if (!RoleConfig.IsManager(dto.RoleName) &&
+                    !RoleConfig.IsEmployee(dto.RoleName))
+                {
+                    return BadRequest(new
+                    {
+                        message = "OrgAdmin can only create manager or employee roles."
+                    });
+                }
+
+                if (!Guid.TryParse(orgIdClaim, out var orgId))
+                    return Forbid();
+
+                dto.OrganizationId = orgId;
             }
 
-            var orgExists = await _context.Organizations
-                .AnyAsync(o => o.Name.ToLower() == orgName.ToLower());
+            var result = await _service.CreateAsync(dto);
 
-            if (orgExists)
-                return BadRequest(new { message = "Organization already exists" });
-
-            if (!await _userService.IsEmailUniqueAsync(request.AdminEmail))
-                return BadRequest(new { message = "Email already exists" });
-
-            if (!_userService.IsPasswordStrong(request.AdminPassword))
-                return BadRequest(new { message = "Weak password" });
-
-            var org = await _orgService.CreateAsync(new CreateOrganizationDto
+            if (result == null)
             {
-                Name = orgName
-            });
+                if (!await _service.IsEmailUniqueAsync(dto.Email))
+                    return BadRequest(new { message = "Email already exists" });
 
-            if (org == null)
-                return StatusCode(500, new { message = "Organization creation failed" });
+                if (!_service.IsPasswordStrong(dto.Password))
+                    return BadRequest(new { message = "Weak password" });
 
-            var user = await _userService.CreateAsync(new CreateUserDto
+                return BadRequest(new { message = "User creation failed" });
+            }
+
+            return Ok(result);
+        }
+
+        // ================= CHECK EMAIL =================
+        [HttpGet("check-email")]
+        public async Task<IActionResult> CheckEmail([FromQuery] string email)
+        {
+            if (string.IsNullOrWhiteSpace(email))
+                return BadRequest(new { message = "Email required" });
+
+            return Ok(new
             {
-                Username = request.AdminUsername.Trim(),
-                Email = request.AdminEmail.Trim().ToLower(),
-                Password = request.AdminPassword,
-                RoleName = "OrgAdmin",
-                OrganizationId = org.Id
+                isUnique = await _service.IsEmailUniqueAsync(email)
             });
+        }
 
-            if (user == null)
-                return StatusCode(500, new { message = "Admin user creation failed" });
+        // ================= CHECK USERNAME =================
+        [HttpGet("check-username")]
+        public IActionResult CheckUsername([FromQuery] string username)
+        {
+            return Ok(new { isUnique = true });
+        }
 
-            return Ok(new { message = "Organization created successfully" });
+        // ================= UPDATE USER =================
+        [HttpPut("{id}")]
+        [Authorize(Roles = "SuperAdmin,OrgAdmin")]
+        public async Task<IActionResult> Update(Guid id, [FromBody] UpdateUserDto dto)
+        {
+            var userRole = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            if (userRole == "OrgAdmin" &&
+                Guid.TryParse(currentUserId, out var currentId) &&
+                currentId == id)
+            {
+                if (RoleConfig.IsEmployee(dto.RoleName))
+                {
+                    return BadRequest(new
+                    {
+                        message = "You cannot demote your own admin account."
+                    });
+                }
+            }
+
+            var result = await _service.UpdateAsync(id, dto);
+
+            if (result == null)
+            {
+                return BadRequest(new
+                {
+                    message = "Update failed (email or username may already exist)"
+                });
+            }
+
+            return Ok(result);
+        }
+
+        // ================= DELETE USER =================
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "SuperAdmin,OrgAdmin")]
+        public async Task<IActionResult> Delete(Guid id)
+        {
+            var currentUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            if (Guid.TryParse(currentUserId, out var currentId) && currentId == id)
+            {
+                return BadRequest(new
+                {
+                    message = "You cannot delete your own account"
+                });
+            }
+
+            var allUsers = await _service.GetAllByOrgAsync(null);
+            var userToDelete = allUsers.FirstOrDefault(u => u.Id == id);
+
+            if (userToDelete != null && userToDelete.Role == "OrgAdmin")
+            {
+                return BadRequest(new
+                {
+                    message = "OrgAdmin accounts are protected"
+                });
+            }
+
+            var (success, message) = await _service.DeleteAsync(id);
+
+            if (!success)
+                return BadRequest(new { message });
+
+            return Ok(new { message });
         }
     }
 }
