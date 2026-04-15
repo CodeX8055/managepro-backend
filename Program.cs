@@ -51,7 +51,7 @@ builder.Services.AddCors(options =>
     {
         policy
             .WithOrigins(
-                "https://projectfrontendx.netlify.app",
+                "https://pmsfrontendx.netlify.app",
                 "http://localhost:4200"
             )
             .AllowAnyHeader()
