@@ -30,6 +30,7 @@ namespace backend.Controllers
             _orgService = orgService;
         }
 
+        // ---------------- LOGIN ----------------
         [HttpPost("login")]
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
@@ -37,23 +38,20 @@ namespace backend.Controllers
             if (request == null)
                 return BadRequest(new { message = "Request body is empty" });
 
+            var email = request.Username?.Trim().ToLower();
+
             var user = await _context.Users
                 .Include(u => u.Role)
-                var email = request.Username?.Trim().ToLower();
-
-var user = await _context.Users
-    .Include(u => u.Role)
-    .FirstOrDefaultAsync(u => u.Email.ToLower() == email);
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == email);
 
             if (user == null)
                 return Unauthorized(new { message = "Invalid credentials" });
 
             if (string.IsNullOrEmpty(user.PasswordHash) ||
-    !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-{
-    return Unauthorized(new { message = "Invalid credentials" });
-}
+                !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+            {
                 return Unauthorized(new { message = "Invalid credentials" });
+            }
 
             var token = _jwtService.GenerateToken(user, user.Role?.Name ?? "");
 
@@ -66,6 +64,7 @@ var user = await _context.Users
             });
         }
 
+        // ---------------- REGISTER ORGANIZATION ----------------
         [HttpPost("register-organization")]
         [AllowAnonymous]
         public async Task<IActionResult> RegisterOrganization([FromBody] RegisterOrganizationRequest request)
@@ -73,35 +72,37 @@ var user = await _context.Users
             try
             {
                 if (request == null)
-                    return BadRequest("Request is null");
+                    return BadRequest(new { message = "Request is null" });
 
-                if (string.IsNullOrWhiteSpace(request.OrganizationName.Trim()) ||
+                if (string.IsNullOrWhiteSpace(request.OrganizationName) ||
                     string.IsNullOrWhiteSpace(request.AdminEmail) ||
                     string.IsNullOrWhiteSpace(request.AdminUsername) ||
                     string.IsNullOrWhiteSpace(request.AdminPassword))
                 {
-                    return BadRequest("All fields are required");
+                    return BadRequest(new { message = "All fields are required" });
                 }
 
+                var orgName = request.OrganizationName.Trim();
+
                 var orgExists = await _context.Organizations
-                    .AnyAsync(o => o.Name == request.OrganizationName.Trim());
+                    .AnyAsync(o => o.Name == orgName);
 
                 if (orgExists)
-                    return BadRequest("Organization already exists");
+                    return BadRequest(new { message = "Organization already exists" });
 
                 if (!await _userService.IsEmailUniqueAsync(request.AdminEmail))
-                    return BadRequest("Email already exists");
+                    return BadRequest(new { message = "Email already exists" });
 
                 if (!_userService.IsPasswordStrong(request.AdminPassword))
                     return BadRequest(new { message = "Weak password" });
 
                 var org = await _orgService.CreateAsync(new CreateOrganizationDto
                 {
-                    Name = request.OrganizationName.Trim().Trim()
+                    Name = orgName
                 });
 
                 if (org == null)
-                    return StatusCode(500, "Organization creation failed");
+                    return StatusCode(500, new { message = "Organization creation failed" });
 
                 var user = await _userService.CreateAsync(new CreateUserDto
                 {
@@ -113,7 +114,7 @@ var user = await _context.Users
                 });
 
                 if (user == null)
-                    return StatusCode(500, "Admin user creation failed");
+                    return StatusCode(500, new { message = "Admin user creation failed" });
 
                 return Ok(new { message = "Organization created successfully" });
             }
@@ -121,7 +122,7 @@ var user = await _context.Users
             {
                 return StatusCode(500, new
                 {
-                    error = ex.Message,
+                    message = ex.Message,
                     inner = ex.InnerException?.Message
                 });
             }
