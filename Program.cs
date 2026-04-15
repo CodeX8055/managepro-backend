@@ -33,17 +33,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 });
 
 //
-// ✅ IMPORTANT: CORS MUST ALLOW PRE-FLIGHT (OPTIONS)
+// ✅ CORS (CLEAN + SAFE)
 //
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
         policy
-            .WithOrigins(
-                "https://pmsfrontendx.netlify.app",
-                "http://localhost:4200"
-            )
+            .WithOrigins("https://pmsfrontendx.netlify.app")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -51,6 +48,9 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+//
+// Swagger only in dev
+//
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -58,7 +58,7 @@ if (app.Environment.IsDevelopment())
 }
 
 //
-// 🔥 CRITICAL ORDER (THIS FIXES YOUR ERROR)
+// 🔥 CORRECT MIDDLEWARE ORDER (IMPORTANT FIX)
 //
 app.UseCors("AllowFrontend");
 
@@ -69,7 +69,7 @@ app.MapControllers();
 app.MapGet("/", () => "ManagePro Backend is Running 🚀");
 
 //
-// DB SEED
+// DB SEED (SAFE)
 //
 using (var scope = app.Services.CreateScope())
 {
@@ -78,7 +78,9 @@ using (var scope = app.Services.CreateScope())
 }
 
 //
-// RENDER PORT
+// Render port fix (SAFE VERSION)
 //
 var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
-app.Run($"http://0.0.0.0:{port}");
+app.Urls.Add($"http://0.0.0.0:{port}");
+
+app.Run();
