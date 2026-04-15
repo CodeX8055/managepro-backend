@@ -40,6 +40,9 @@ namespace backend.Controllers
 
             var email = request.Username?.Trim().ToLower();
 
+            if (string.IsNullOrWhiteSpace(email))
+                return BadRequest(new { message = "Email is required" });
+
             var user = await _context.Users
                 .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.Email.ToLower() == email);
@@ -47,11 +50,13 @@ namespace backend.Controllers
             if (user == null)
                 return Unauthorized(new { message = "Invalid credentials" });
 
-            if (string.IsNullOrEmpty(user.PasswordHash) ||
-                !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-            {
+            if (string.IsNullOrWhiteSpace(user.PasswordHash))
                 return Unauthorized(new { message = "Invalid credentials" });
-            }
+
+            var isValidPassword = BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash);
+
+            if (!isValidPassword)
+                return Unauthorized(new { message = "Invalid credentials" });
 
             var token = _jwtService.GenerateToken(user, user.Role?.Name ?? "");
 
@@ -74,15 +79,18 @@ namespace backend.Controllers
                 if (request == null)
                     return BadRequest(new { message = "Request is null" });
 
-                if (string.IsNullOrWhiteSpace(request.OrganizationName) ||
-                    string.IsNullOrWhiteSpace(request.AdminEmail) ||
-                    string.IsNullOrWhiteSpace(request.AdminUsername) ||
-                    string.IsNullOrWhiteSpace(request.AdminPassword))
+                var orgName = request.OrganizationName?.Trim();
+                var email = request.AdminEmail?.Trim().ToLower();
+                var username = request.AdminUsername?.Trim();
+                var password = request.AdminPassword;
+
+                if (string.IsNullOrWhiteSpace(orgName) ||
+                    string.IsNullOrWhiteSpace(email) ||
+                    string.IsNullOrWhiteSpace(username) ||
+                    string.IsNullOrWhiteSpace(password))
                 {
                     return BadRequest(new { message = "All fields are required" });
                 }
-
-                var orgName = request.OrganizationName.Trim();
 
                 var orgExists = await _context.Organizations
                     .AnyAsync(o => o.Name == orgName);
@@ -90,10 +98,10 @@ namespace backend.Controllers
                 if (orgExists)
                     return BadRequest(new { message = "Organization already exists" });
 
-                if (!await _userService.IsEmailUniqueAsync(request.AdminEmail))
+                if (!await _userService.IsEmailUniqueAsync(email))
                     return BadRequest(new { message = "Email already exists" });
 
-                if (!_userService.IsPasswordStrong(request.AdminPassword))
+                if (!_userService.IsPasswordStrong(password))
                     return BadRequest(new { message = "Weak password" });
 
                 var org = await _orgService.CreateAsync(new CreateOrganizationDto
@@ -106,9 +114,9 @@ namespace backend.Controllers
 
                 var user = await _userService.CreateAsync(new CreateUserDto
                 {
-                    Username = request.AdminUsername,
-                    Email = request.AdminEmail,
-                    Password = request.AdminPassword,
+                    Username = username,
+                    Email = email,
+                    Password = password,
                     RoleName = "OrgAdmin",
                     OrganizationId = org.Id
                 });

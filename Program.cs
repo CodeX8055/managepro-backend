@@ -83,7 +83,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 //
-// FIX: ROOT ROUTE (THIS SOLVES YOUR 404)
+// ROOT ROUTE (FIXED - ONLY ONE)
 //
 app.MapGet("/", () => Results.Ok(new
 {
@@ -92,7 +92,7 @@ app.MapGet("/", () => Results.Ok(new
 }));
 
 //
-// OPTIONAL HEALTH CHECK
+// HEALTH CHECK
 //
 app.MapGet("/health", () => Results.Ok("OK"));
 
