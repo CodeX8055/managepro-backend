@@ -38,7 +38,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
-        policy.AllowAnyOrigin()
+        policy.WithOrigins("https://projectfrontendx.netlify.app")
               .AllowAnyMethod()
               .AllowAnyHeader());
 });
