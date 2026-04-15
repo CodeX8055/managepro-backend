@@ -6,26 +6,16 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-//
-// SERVICES
-//
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-//
-// DATABASE
-//
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-//
-// JWT
-//
 var jwtKey = builder.Configuration["Jwt:Key"];
-
 if (string.IsNullOrWhiteSpace(jwtKey))
-    throw new Exception("JWT Key is missing in configuration");
+    throw new Exception("JWT Key is missing");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 .AddJwtBearer(options =>
@@ -43,7 +33,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 });
 
 //
-// CORS (IMPORTANT)
+// ✅ IMPORTANT: CORS MUST ALLOW PRE-FLIGHT (OPTIONS)
 //
 builder.Services.AddCors(options =>
 {
@@ -61,9 +51,6 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-//
-// SWAGGER
-//
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -71,21 +58,18 @@ if (app.Environment.IsDevelopment())
 }
 
 //
-// IMPORTANT MIDDLEWARE ORDER (FIXED)
+// 🔥 CRITICAL ORDER (THIS FIXES YOUR ERROR)
 //
 app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-//
-// ROUTES
-//
 app.MapControllers();
 app.MapGet("/", () => "ManagePro Backend is Running 🚀");
 
 //
-// SEED DB
+// DB SEED
 //
 using (var scope = app.Services.CreateScope())
 {
