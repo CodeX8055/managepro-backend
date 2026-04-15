@@ -20,14 +20,12 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 //
-// JWT CONFIG
+// JWT
 //
 var jwtKey = builder.Configuration["Jwt:Key"];
 
 if (string.IsNullOrWhiteSpace(jwtKey))
-{
     throw new Exception("JWT Key is missing in configuration");
-}
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 .AddJwtBearer(options =>
@@ -45,7 +43,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 });
 
 //
-// CORS (NETLIFY + LOCAL DEV)
+// CORS (IMPORTANT)
 //
 builder.Services.AddCors(options =>
 {
@@ -64,7 +62,7 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 //
-// SWAGGER (DEV ONLY)
+// SWAGGER
 //
 if (app.Environment.IsDevelopment())
 {
@@ -73,10 +71,8 @@ if (app.Environment.IsDevelopment())
 }
 
 //
-// MIDDLEWARE ORDER (IMPORTANT)
+// IMPORTANT MIDDLEWARE ORDER (FIXED)
 //
-app.UseRouting();
-
 app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
@@ -85,25 +81,20 @@ app.UseAuthorization();
 //
 // ROUTES
 //
-app.MapGet("/", () => "ManagePro Backend is Running 🚀");
 app.MapControllers();
+app.MapGet("/", () => "ManagePro Backend is Running 🚀");
 
 //
-// DATABASE SEEDING (SAFE)
+// SEED DB
 //
-try
+using (var scope = app.Services.CreateScope())
 {
-    using var scope = app.Services.CreateScope();
     var services = scope.ServiceProvider;
     await SeedData.InitializeAsync(services);
 }
-catch (Exception ex)
-{
-    Console.WriteLine("Seeding failed: " + ex.Message);
-}
 
 //
-// RENDER PORT FIX
+// RENDER PORT
 //
 var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 app.Run($"http://0.0.0.0:{port}");
