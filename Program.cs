@@ -6,18 +6,27 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+//
+// SERVICES
+//
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+//
+// DATABASE
+//
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+//
+// JWT CONFIG
+//
 var jwtKey = builder.Configuration["Jwt:Key"];
 
-if (string.IsNullOrEmpty(jwtKey))
+if (string.IsNullOrWhiteSpace(jwtKey))
 {
-    throw new Exception("JWT Key is missing");
+    throw new Exception("JWT Key is missing in configuration");
 }
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -35,32 +44,63 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     };
 });
 
+//
+// CORS (NETLIFY FRONTEND ONLY)
+//
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
+    {
         policy.WithOrigins("https://projectfrontendx.netlify.app")
-              .AllowAnyMethod()
-              .AllowAnyHeader());
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
 });
 
 var app = builder.Build();
 
-app.UseSwagger();
-app.UseSwaggerUI();
-
+//
+// PIPELINE ORDER (VERY IMPORTANT)
+//
 app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
+//
+// SWAGGER ONLY IN DEVELOPMENT
+//
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+//
+// TEST ROUTE
+//
 app.MapGet("/", () => "ManagePro Backend is Running 🚀");
 
 app.MapControllers();
 
-using (var scope = app.Services.CreateScope())
+//
+// SEED DATABASE (SAFE)
+//
+try
 {
-    var services = scope.ServiceProvider;
-    await SeedData.InitializeAsync(services);
+    using (var scope = app.Services.CreateScope())
+    {
+        var services = scope.ServiceProvider;
+        await SeedData.InitializeAsync(services);
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine("Seeding failed: " + ex.Message);
 }
 
-app.Run();
+//
+// RENDER PORT FIX (CRITICAL)
+//
+var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
+app.Run($"http://0.0.0.0:{port}");
