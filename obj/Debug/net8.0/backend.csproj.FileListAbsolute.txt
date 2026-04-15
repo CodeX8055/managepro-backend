@@ -114,3 +114,4 @@ E:\Project and Task management ANTIG\backend\bin\Debug\net8.0\backend.dll
 E:\Project and Task management ANTIG\backend\bin\Debug\net8.0\backend.pdb
 E:\Project and Task management ANTIG\backend\obj\Debug\net8.0\backend.genruntimeconfig.cache
 E:\Project and Task management ANTIG\backend\obj\Debug\net8.0\ref\backend.dll
+E:\Project and Task management ANTIG\backend\obj\Debug\net8.0\backend.sourcelink.json
