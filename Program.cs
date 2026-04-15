@@ -6,26 +6,22 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-//
-// CONTROLLERS
-//
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-//
-// DATABASE (Render PostgreSQL / Local)
-//
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+var conn = builder.Configuration.GetConnectionString("DefaultConnection");
 
-//
-// JWT AUTH
-//
+if (string.IsNullOrWhiteSpace(conn))
+    throw new Exception("Database connection string missing");
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(conn));
+
 var jwtKey = builder.Configuration["Jwt:Key"];
 
-if (string.IsNullOrEmpty(jwtKey))
-    throw new Exception("JWT Key is missing in configuration");
+if (string.IsNullOrWhiteSpace(jwtKey))
+    throw new Exception("JWT Key missing");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 .AddJwtBearer(options =>
@@ -42,35 +38,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     };
 });
 
-//
-// CORS (NETLIFY + LOCALHOST)
-//
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy
-            .WithOrigins(
-                "https://pmsfrontendx.netlify.app",
-                "http://localhost:4200"
-            )
-            .AllowAnyHeader()
-            .AllowAnyMethod();
+        policy.WithOrigins("https://pmsfrontendx.netlify.app")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
     });
 });
 
 var app = builder.Build();
 
-//
-// SWAGGER (ALWAYS ENABLE FOR DEBUGGING)
-//
 app.UseSwagger();
 app.UseSwaggerUI();
-
-//
-// MIDDLEWARE ORDER (IMPORTANT)
-//
-app.UseRouting();
 
 app.UseCors("AllowFrontend");
 
@@ -78,28 +59,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapGet("/", () => "API Running 🚀");
 
-app.MapGet("/", () => "ManagePro API Running 🚀");
-
-//
-// DATABASE SEED (SAFE WRAP)
-//
-using (var scope = app.Services.CreateScope())
-{
-    try
-    {
-        var services = scope.ServiceProvider;
-        await SeedData.InitializeAsync(services);
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine("SeedData error: " + ex.Message);
-    }
-}
-
-//
-// RENDER PORT BINDING
-//
 var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 app.Urls.Add($"http://0.0.0.0:{port}");
 

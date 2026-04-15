@@ -10,11 +10,19 @@ namespace backend.Data
             using var scope = serviceProvider.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            // Ensure DB exists + migrations applied safely
-            await context.Database.MigrateAsync();
+            try
+            {
+                // ✅ Safe migration (won't crash app if DB issue happens)
+                await context.Database.MigrateAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Migration error: " + ex.Message);
+                return; // stop seeding if DB is broken
+            }
 
             // =========================
-            // ROLES SEED (SAFE VERSION)
+            // ROLES SEED
             // =========================
             if (!await context.Roles.AnyAsync())
             {
