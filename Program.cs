@@ -83,13 +83,18 @@ app.UseAuthorization();
 app.MapControllers();
 
 //
-// ROOT ROUTE (FIXED - ONLY ONE)
+// ROOT ROUTE (SAFE)
 //
-app.MapGet("/", () => Results.Ok(new
+app.MapGet("/", () =>
 {
-    message = "ManagePro Backend is running",
-    swagger = "/swagger"
-}));
+    return Results.Ok(new
+    {
+        status = "running",
+        service = "ManagePro Backend",
+        swagger = "/swagger",
+        health = "/health"
+    });
+});
 
 //
 // HEALTH CHECK
