@@ -59,62 +59,64 @@ namespace backend.Controllers
         }
 
         [HttpPost("register-organization")]
-[AllowAnonymous]
-public async Task<IActionResult> RegisterOrganization([FromBody] RegisterOrganizationRequest request)
-{
-    try
-    {
-        if (request == null)
-            return BadRequest("Request is null");
-
-        if (string.IsNullOrWhiteSpace(request.OrganizationName) ||
-            string.IsNullOrWhiteSpace(request.AdminEmail) ||
-            string.IsNullOrWhiteSpace(request.AdminUsername) ||
-            string.IsNullOrWhiteSpace(request.AdminPassword))
+        [AllowAnonymous]
+        public async Task<IActionResult> RegisterOrganization([FromBody] RegisterOrganizationRequest request)
         {
-            return BadRequest("All fields are required");
+            try
+            {
+                if (request == null)
+                    return BadRequest("Request is null");
+
+                if (string.IsNullOrWhiteSpace(request.OrganizationName) ||
+                    string.IsNullOrWhiteSpace(request.AdminEmail) ||
+                    string.IsNullOrWhiteSpace(request.AdminUsername) ||
+                    string.IsNullOrWhiteSpace(request.AdminPassword))
+                {
+                    return BadRequest("All fields are required");
+                }
+
+                var orgExists = await _context.Organizations
+                    .AnyAsync(o => o.Name == request.OrganizationName);
+
+                if (orgExists)
+                    return BadRequest("Organization already exists");
+
+                if (!await _userService.IsEmailUniqueAsync(request.AdminEmail))
+                    return BadRequest("Email already exists");
+
+                if (!_userService.IsPasswordStrong(request.AdminPassword))
+                    return BadRequest("Weak password");
+
+                var org = await _orgService.CreateAsync(new CreateOrganizationDto
+                {
+                    Name = request.OrganizationName
+                });
+
+                if (org == null)
+                    return StatusCode(500, "Organization creation failed");
+
+                var user = await _userService.CreateAsync(new CreateUserDto
+                {
+                    Username = request.AdminUsername,
+                    Email = request.AdminEmail,
+                    Password = request.AdminPassword,
+                    RoleName = "OrgAdmin",
+                    OrganizationId = org.Id
+                });
+
+                if (user == null)
+                    return StatusCode(500, "Admin user creation failed");
+
+                return Ok(new { message = "Organization created successfully" });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    error = ex.Message,
+                    inner = ex.InnerException?.Message
+                });
+            }
         }
-
-        var orgExists = await _context.Organizations
-            .AnyAsync(o => o.Name == request.OrganizationName);
-
-        if (orgExists)
-            return BadRequest("Organization already exists");
-
-        if (!await _userService.IsEmailUniqueAsync(request.AdminEmail))
-            return BadRequest("Email already exists");
-
-        if (!_userService.IsPasswordStrong(request.AdminPassword))
-            return BadRequest("Weak password");
-
-        var org = await _orgService.CreateAsync(new CreateOrganizationDto
-        {
-            Name = request.OrganizationName
-        });
-
-        if (org == null)
-            return StatusCode(500, "Organization creation failed");
-
-        var user = await _userService.CreateAsync(new CreateUserDto
-        {
-            Username = request.AdminUsername,
-            Email = request.AdminEmail,
-            Password = request.AdminPassword,
-            RoleName = "OrgAdmin",
-            OrganizationId = org.Id
-        });
-
-        if (user == null)
-            return StatusCode(500, "Admin user creation failed");
-
-        return Ok(new { message = "Organization created successfully" });
-    }
-    catch (Exception ex)
-    {
-        return StatusCode(500, new
-        {
-            error = ex.Message,
-            inner = ex.InnerException?.Message
-        });
     }
 }
