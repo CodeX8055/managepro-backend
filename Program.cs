@@ -42,7 +42,12 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins("https://pmsfrontendx.netlify.app")
             .AllowAnyHeader()
+<<<<<<< HEAD
             .AllowAnyMethod();
+=======
+            .AllowAnyMethod()
+            .AllowCredentials();
+>>>>>>> 17f5869 (Updated backend CORS and API fixes)
     });
 });
 
@@ -60,6 +65,7 @@ if (app.Environment.IsDevelopment())
 //
 // 🔥 CORRECT MIDDLEWARE ORDER (IMPORTANT FIX)
 //
+app.UseRouting();
 app.UseCors("AllowFrontend");
 
 app.UseAuthentication();

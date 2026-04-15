@@ -4,7 +4,7 @@ using backend.Models;
 using backend.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-
+using Microsoft.AspNetCore.Authorization;
 namespace backend.Controllers
 {
     [ApiController]
@@ -25,6 +25,7 @@ namespace backend.Controllers
         }
 
         [HttpPost("login")]
+        [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             // PRO UPGRADE: In a professional multi-tenant system, Email is the global unique identifier.
@@ -50,6 +51,7 @@ namespace backend.Controllers
         }
 
         [HttpPost("register-organization")]
+        [AllowAnonymous]
         public async Task<IActionResult> RegisterOrganization([FromBody] RegisterOrganizationRequest request)
         {
             try 
