@@ -10,6 +10,9 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// =====================
+// DB CONNECTION
+// =====================
 var conn = builder.Configuration.GetConnectionString("DefaultConnection");
 
 if (string.IsNullOrWhiteSpace(conn))
@@ -18,6 +21,9 @@ if (string.IsNullOrWhiteSpace(conn))
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(conn));
 
+// =====================
+// JWT CONFIG
+// =====================
 var jwtKey = builder.Configuration["Jwt:Key"];
 
 if (string.IsNullOrWhiteSpace(jwtKey))
@@ -34,24 +40,34 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         ValidateIssuerSigningKey = true,
         ValidIssuer = builder.Configuration["Jwt:Issuer"],
         ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(jwtKey))
     };
 });
 
+// =====================
+// CORS (NETLIFY FRONTEND)
+// =====================
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("https://pmsfrontendx.netlify.app")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy
+            .WithOrigins("https://pmsfrontendx.netlify.app")
+            .AllowAnyHeader()
+            .AllowAnyMethod();
     });
 });
 
 var app = builder.Build();
 
+// =====================
+// MIDDLEWARE ORDER
+// =====================
 app.UseSwagger();
 app.UseSwaggerUI();
+
+app.UseRouting();
 
 app.UseCors("AllowFrontend");
 
@@ -61,6 +77,9 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapGet("/", () => "API Running 🚀");
 
+// =====================
+// RENDER PORT BINDING
+// =====================
 var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 app.Urls.Add($"http://0.0.0.0:{port}");
 

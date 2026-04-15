@@ -10,44 +10,39 @@ namespace backend.Data
             using var scope = serviceProvider.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+            // =========================
+            // DB MIGRATION
+            // =========================
             try
             {
-                // ✅ Safe migration (won't crash app if DB issue happens)
                 await context.Database.MigrateAsync();
             }
             catch (Exception ex)
             {
-                Console.WriteLine("Migration error: " + ex.Message);
-                return; // stop seeding if DB is broken
+                Console.WriteLine($"[SeedData] Migration failed: {ex.Message}");
+                throw; // important: do NOT silently continue in production
             }
 
             // =========================
             // ROLES SEED
             // =========================
-            if (!await context.Roles.AnyAsync())
+            var existingRoles = await context.Roles.AnyAsync();
+
+            if (!existingRoles)
             {
-                var roleNames = new List<string>
+                var roleNames = new[]
                 {
-                    "SuperAdmin",
-                    "OrgAdmin",
-                    "Project Manager",
-                    "HR Manager",
-                    "Tech Lead",
-                    "Product Owner",
-                    "Resource Manager",
-                    "Sr. Developer",
-                    "Jr. Developer",
-                    "Full-Stack Developer",
-                    "QA Tester",
-                    "UI/UX Designer",
-                    "Intern"
+                    "SuperAdmin","OrgAdmin","Project Manager","HR Manager",
+                    "Tech Lead","Product Owner","Resource Manager",
+                    "Sr. Developer","Jr. Developer","Full-Stack Developer",
+                    "QA Tester","UI/UX Designer","Intern"
                 };
 
                 var roles = roleNames.Select(name => new Role
                 {
                     Id = Guid.NewGuid(),
                     Name = name
-                });
+                }).ToList();
 
                 await context.Roles.AddRangeAsync(roles);
                 await context.SaveChangesAsync();
@@ -64,20 +59,23 @@ namespace backend.Data
                 var superAdminRole = await context.Roles
                     .FirstOrDefaultAsync(r => r.Name == "SuperAdmin");
 
-                if (superAdminRole != null)
+                if (superAdminRole == null)
                 {
-                    var superAdmin = new User
-                    {
-                        Id = Guid.NewGuid(),
-                        Username = "superuser",
-                        Email = "superuser@pms.com",
-                        PasswordHash = BCrypt.Net.BCrypt.HashPassword("System$123"),
-                        RoleId = superAdminRole.Id
-                    };
-
-                    await context.Users.AddAsync(superAdmin);
-                    await context.SaveChangesAsync();
+                    Console.WriteLine("[SeedData] SuperAdmin role not found");
+                    return;
                 }
+
+                var user = new User
+                {
+                    Id = Guid.NewGuid(),
+                    Username = "superuser",
+                    Email = "superuser@pms.com",
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("System$123"),
+                    RoleId = superAdminRole.Id
+                };
+
+                await context.Users.AddAsync(user);
+                await context.SaveChangesAsync();
             }
         }
     }
