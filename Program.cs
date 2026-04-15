@@ -6,12 +6,15 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// =====================
+// SERVICES
+// =====================
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // =====================
-// DB CONNECTION
+// DATABASE
 // =====================
 var conn = builder.Configuration.GetConnectionString("DefaultConnection");
 
@@ -38,8 +41,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
+
         ValidIssuer = builder.Configuration["Jwt:Issuer"],
         ValidAudience = builder.Configuration["Jwt:Audience"],
+
         IssuerSigningKey = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(jwtKey))
     };
@@ -53,7 +58,10 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowFrontend", policy =>
     {
         policy
-            .WithOrigins("https://pmsfrontendx.netlify.app")
+            .WithOrigins(
+                "https://pmsfrontendx.netlify.app",
+                "http://localhost:4200"
+            )
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -62,12 +70,17 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // =====================
-// MIDDLEWARE ORDER
+// IMPORTANT: ERROR DEBUG (REMOVE LATER IF NEEDED)
+// =====================
+app.UseDeveloperExceptionPage();
+
+// =====================
+// MIDDLEWARE ORDER (IMPORTANT)
 // =====================
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.UseRouting();
+app.UseHttpsRedirection();
 
 app.UseCors("AllowFrontend");
 
@@ -78,7 +91,16 @@ app.MapControllers();
 app.MapGet("/", () => "API Running 🚀");
 
 // =====================
-// RENDER PORT BINDING
+// AUTO MIGRATION (VERY IMPORTANT FOR RENDER)
+// =====================
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+}
+
+// =====================
+// RENDER PORT FIX
 // =====================
 var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 app.Urls.Add($"http://0.0.0.0:{port}");
