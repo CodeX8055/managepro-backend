@@ -7,24 +7,25 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 //
-// SERVICES
+// CONTROLLERS
 //
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 //
-// DATABASE
+// DATABASE (Render PostgreSQL / Local)
 //
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 //
-// JWT CONFIG
+// JWT AUTH
 //
 var jwtKey = builder.Configuration["Jwt:Key"];
-if (string.IsNullOrWhiteSpace(jwtKey))
-    throw new Exception("JWT Key is missing");
+
+if (string.IsNullOrEmpty(jwtKey))
+    throw new Exception("JWT Key is missing in configuration");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 .AddJwtBearer(options =>
@@ -42,14 +43,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 });
 
 //
-// CORS (NETLIFY FRONTEND)
+// CORS (NETLIFY + LOCALHOST)
 //
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
         policy
-            .WithOrigins("https://pmsfrontendx.netlify.app")
+            .WithOrigins(
+                "https://pmsfrontendx.netlify.app",
+                "http://localhost:4200"
+            )
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -58,29 +62,45 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 //
-// SWAGGER (ENABLE ON BOTH DEV + RENDER FOR TESTING)
+// SWAGGER (ALWAYS ENABLE FOR DEBUGGING)
 //
 app.UseSwagger();
 app.UseSwaggerUI();
 
 //
-// MIDDLEWARE ORDER
+// MIDDLEWARE ORDER (IMPORTANT)
 //
+app.UseRouting();
+
 app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapGet("/", () => "ManagePro Backend is Running 🚀");
+
+app.MapGet("/", () => "ManagePro API Running 🚀");
 
 //
-// DATABASE SEED
+// DATABASE SEED (SAFE WRAP)
 //
 using (var scope = app.Services.CreateScope())
 {
-    var services = scope.ServiceProvider;
-    await SeedData.InitializeAsync(services);
+    try
+    {
+        var services = scope.ServiceProvider;
+        await SeedData.InitializeAsync(services);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine("SeedData error: " + ex.Message);
+    }
 }
+
+//
+// RENDER PORT BINDING
+//
+var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
+app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();
