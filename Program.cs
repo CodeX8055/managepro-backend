@@ -7,12 +7,16 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Controllers
+//
+// CONTROLLERS
+//
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// DB
+//
+// DATABASE
+//
 var conn = builder.Configuration.GetConnectionString("DefaultConnection");
 
 if (string.IsNullOrWhiteSpace(conn))
@@ -21,13 +25,18 @@ if (string.IsNullOrWhiteSpace(conn))
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseNpgsql(conn));
 
-// SERVICES (THIS IS CRITICAL)
+//
+// SERVICES
+//
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IOrganizationService, OrganizationService>();
 
+//
 // JWT
+//
 var jwtKey = builder.Configuration["Jwt:Key"];
+
 if (string.IsNullOrWhiteSpace(jwtKey))
     throw new Exception("JWT Key missing");
 
@@ -47,7 +56,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     };
 });
 
+//
 // CORS
+//
 builder.Services.AddCors(opt =>
 {
     opt.AddPolicy("AllowFrontend", p =>
@@ -58,6 +69,9 @@ builder.Services.AddCors(opt =>
 
 var app = builder.Build();
 
+//
+// PIPELINE
+//
 app.UseSwagger();
 app.UseSwaggerUI();
 
@@ -68,6 +82,23 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+//
+// FIX: ROOT ROUTE (THIS SOLVES YOUR 404)
+//
+app.MapGet("/", () => Results.Ok(new
+{
+    message = "ManagePro Backend is running",
+    swagger = "/swagger"
+}));
+
+//
+// OPTIONAL HEALTH CHECK
+//
+app.MapGet("/health", () => Results.Ok("OK"));
+
+//
+// PORT CONFIG (Render safe)
+//
 var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 app.Urls.Add($"http://0.0.0.0:{port}");
 
