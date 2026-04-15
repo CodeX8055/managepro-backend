@@ -39,12 +39,20 @@ namespace backend.Controllers
 
             var user = await _context.Users
                 .Include(u => u.Role)
-                .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Username.ToLower());
+                var email = request.Username?.Trim().ToLower();
+
+var user = await _context.Users
+    .Include(u => u.Role)
+    .FirstOrDefaultAsync(u => u.Email.ToLower() == email);
 
             if (user == null)
                 return Unauthorized(new { message = "Invalid credentials" });
 
-            if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+            if (string.IsNullOrEmpty(user.PasswordHash) ||
+    !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+{
+    return Unauthorized(new { message = "Invalid credentials" });
+}
                 return Unauthorized(new { message = "Invalid credentials" });
 
             var token = _jwtService.GenerateToken(user, user.Role?.Name ?? "");
@@ -67,7 +75,7 @@ namespace backend.Controllers
                 if (request == null)
                     return BadRequest("Request is null");
 
-                if (string.IsNullOrWhiteSpace(request.OrganizationName) ||
+                if (string.IsNullOrWhiteSpace(request.OrganizationName.Trim()) ||
                     string.IsNullOrWhiteSpace(request.AdminEmail) ||
                     string.IsNullOrWhiteSpace(request.AdminUsername) ||
                     string.IsNullOrWhiteSpace(request.AdminPassword))
@@ -76,7 +84,7 @@ namespace backend.Controllers
                 }
 
                 var orgExists = await _context.Organizations
-                    .AnyAsync(o => o.Name == request.OrganizationName);
+                    .AnyAsync(o => o.Name == request.OrganizationName.Trim());
 
                 if (orgExists)
                     return BadRequest("Organization already exists");
@@ -85,11 +93,11 @@ namespace backend.Controllers
                     return BadRequest("Email already exists");
 
                 if (!_userService.IsPasswordStrong(request.AdminPassword))
-                    return BadRequest("Weak password");
+                    return BadRequest(new { message = "Weak password" });
 
                 var org = await _orgService.CreateAsync(new CreateOrganizationDto
                 {
-                    Name = request.OrganizationName
+                    Name = request.OrganizationName.Trim().Trim()
                 });
 
                 if (org == null)
