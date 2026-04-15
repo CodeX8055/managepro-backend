@@ -6,13 +6,22 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+//
+// SERVICES
+//
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+//
+// DATABASE
+//
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+//
+// JWT CONFIG
+//
 var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrWhiteSpace(jwtKey))
     throw new Exception("JWT Key is missing");
@@ -33,7 +42,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 });
 
 //
-// ✅ CORS (CLEAN + SAFE)
+// CORS (SAFE FOR NETLIFY + ANGULAR)
 //
 builder.Services.AddCors(options =>
 {
@@ -42,19 +51,14 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins("https://pmsfrontendx.netlify.app")
             .AllowAnyHeader()
-<<<<<<< HEAD
             .AllowAnyMethod();
-=======
-            .AllowAnyMethod()
-            .AllowCredentials();
->>>>>>> 17f5869 (Updated backend CORS and API fixes)
     });
 });
 
 var app = builder.Build();
 
 //
-// Swagger only in dev
+// SWAGGER (DEV ONLY)
 //
 if (app.Environment.IsDevelopment())
 {
@@ -63,19 +67,19 @@ if (app.Environment.IsDevelopment())
 }
 
 //
-// 🔥 CORRECT MIDDLEWARE ORDER (IMPORTANT FIX)
+// MIDDLEWARE ORDER (IMPORTANT)
 //
-app.UseRouting();
 app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
 app.MapGet("/", () => "ManagePro Backend is Running 🚀");
 
 //
-// DB SEED (SAFE)
+// DATABASE SEED
 //
 using (var scope = app.Services.CreateScope())
 {
@@ -84,7 +88,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 //
-// Render port fix (SAFE VERSION)
+// RENDER DEPLOY PORT
 //
 var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 app.Urls.Add($"http://0.0.0.0:{port}");
