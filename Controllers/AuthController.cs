@@ -1,10 +1,12 @@
 using System;
+using System.Threading.Tasks;
 using backend.Data;
 using backend.Models;
 using backend.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
+
 namespace backend.Controllers
 {
     [ApiController]
@@ -16,7 +18,11 @@ namespace backend.Controllers
         private readonly IUserService _userService;
         private readonly IOrganizationService _orgService;
 
-        public AuthController(AppDbContext context, IJwtService jwtService, IUserService userService, IOrganizationService orgService)
+        public AuthController(
+            AppDbContext context,
+            IJwtService jwtService,
+            IUserService userService,
+            IOrganizationService orgService)
         {
             _context = context;
             _jwtService = jwtService;
@@ -28,25 +34,27 @@ namespace backend.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
-            // PRO UPGRADE: In a professional multi-tenant system, Email is the global unique identifier.
-            // This allows different organizations to safely use the same usernames (like 'admin').
+            if (request == null)
+                return BadRequest(new { message = "Request body is empty" });
+
             var user = await _context.Users
                 .Include(u => u.Role)
                 .FirstOrDefaultAsync(u => u.Email.ToLower() == request.Username.ToLower());
-                
-            if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-            {
-                return Unauthorized(new { message = "Invalid credentials. Please ensure you are using your registered Email address to login." });
-            }
+
+            if (user == null)
+                return Unauthorized(new { message = "Invalid credentials" });
+
+            if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+                return Unauthorized(new { message = "Invalid credentials" });
 
             var token = _jwtService.GenerateToken(user, user.Role?.Name ?? "");
 
-            return Ok(new AuthResponse 
-            { 
-                Token = token, 
-                Username = user.Username, 
-                Role = user.Role?.Name ?? "", 
-                OrganizationId = user.OrganizationId 
+            return Ok(new AuthResponse
+            {
+                Token = token,
+                Username = user.Username,
+                Role = user.Role?.Name ?? "",
+                OrganizationId = user.OrganizationId
             });
         }
 
@@ -54,46 +62,69 @@ namespace backend.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> RegisterOrganization([FromBody] RegisterOrganizationRequest request)
         {
-            try 
+            if (request == null)
+                return BadRequest(new { message = "Request body is empty" });
+
+            try
             {
-                // 1. Validation
+                // validate
                 if (string.IsNullOrWhiteSpace(request.OrganizationName))
-                    return BadRequest(new { message = "Organization name is required." });
+                    return BadRequest(new { message = "Organization name required" });
+
+                if (string.IsNullOrWhiteSpace(request.AdminEmail))
+                    return BadRequest(new { message = "Admin email required" });
+
+                if (string.IsNullOrWhiteSpace(request.AdminPassword))
+                    return BadRequest(new { message = "Admin password required" });
 
                 if (await _context.Organizations.AnyAsync(o => o.Name == request.OrganizationName))
-                    return BadRequest(new { message = "Organization name already exists." });
+                    return BadRequest(new { message = "Organization already exists" });
 
                 if (!await _userService.IsEmailUniqueAsync(request.AdminEmail))
-                    return BadRequest(new { message = "Email already in use." });
-                
-                // Note: Username uniqueness is now handled per-organization.
-                // Since this is a new organization, any username is acceptable.
+                    return BadRequest(new { message = "Email already exists" });
 
                 if (!_userService.IsPasswordStrong(request.AdminPassword))
-                    return BadRequest(new { message = "Password does not meet strength requirements (Min 8 chars, Mixed Case, Number, Special Char)." });
+                    return BadRequest(new { message = "Weak password" });
 
-                // 2. Create Organization
-                var org = await _orgService.CreateAsync(new CreateOrganizationDto { Name = request.OrganizationName });
-                if (org == null) return BadRequest(new { message = "Failed to create organization. Internal database error." });
-
-                // 3. Create Admin User
-                var userDto = await _userService.CreateAsync(new CreateUserDto
+                // create org
+                var org = await _orgService.CreateAsync(new CreateOrganizationDto
                 {
-                    Username = request.AdminUsername,
-                    Email = request.AdminEmail,
+                    Name = request.OrganizationName.Trim()
+                });
+
+                if (org == null)
+                    return StatusCode(500, new { message = "Organization creation failed" });
+
+                // create admin
+                var user = await _userService.CreateAsync(new CreateUserDto
+                {
+                    Username = request.AdminUsername?.Trim(),
+                    Email = request.AdminEmail.Trim().ToLower(),
                     Password = request.AdminPassword,
                     RoleName = "OrgAdmin",
                     OrganizationId = org.Id
                 });
 
-                if (userDto == null) return BadRequest(new { message = "Failed to create administrator account. Please check your inputs." });
+                if (user == null)
+                    return StatusCode(500, new { message = "Admin user creation failed" });
 
-                return Ok(new { message = "Organization registered successfully! You can now login." });
+                return Ok(new { message = "Organization created successfully" });
+            }
+            catch (DbUpdateException dbEx)
+            {
+                return StatusCode(500, new
+                {
+                    message = "Database error",
+                    detail = dbEx.InnerException?.Message ?? dbEx.Message
+                });
             }
             catch (Exception ex)
             {
-                // Master-level diagnostic report
-                return StatusCode(500, new { message = "CRITICAL ERROR: " + ex.Message, detail = ex.InnerException?.Message });
+                return StatusCode(500, new
+                {
+                    message = "Server error",
+                    detail = ex.Message
+                });
             }
         }
     }
