@@ -45,22 +45,26 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 });
 
 //
-// CORS (NETLIFY FRONTEND ONLY)
+// CORS (NETLIFY + LOCAL DEV)
 //
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("https://projectfrontendx.netlify.app")
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        policy
+            .WithOrigins(
+                "https://projectfrontendx.netlify.app",
+                "http://localhost:4200"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod();
     });
 });
 
 var app = builder.Build();
 
 //
-// IMPORTANT: MIDDLEWARE ORDER FIX
+// SWAGGER (DEV ONLY)
 //
 if (app.Environment.IsDevelopment())
 {
@@ -68,6 +72,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+//
+// MIDDLEWARE ORDER (IMPORTANT)
+//
 app.UseRouting();
 
 app.UseCors("AllowFrontend");
@@ -76,14 +83,13 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 //
-// TEST ROUTE
+// ROUTES
 //
 app.MapGet("/", () => "ManagePro Backend is Running 🚀");
-
 app.MapControllers();
 
 //
-// SEED DATABASE (SAFE)
+// DATABASE SEEDING (SAFE)
 //
 try
 {
@@ -97,7 +103,7 @@ catch (Exception ex)
 }
 
 //
-// RENDER PORT FIX (IMPORTANT)
+// RENDER PORT FIX
 //
 var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 app.Run($"http://0.0.0.0:{port}");
