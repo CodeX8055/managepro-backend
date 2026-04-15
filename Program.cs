@@ -6,7 +6,7 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Services
+// Controllers
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -17,16 +17,13 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 // JWT
 var jwtKey = builder.Configuration["Jwt:Key"];
+
 if (string.IsNullOrEmpty(jwtKey))
 {
     throw new Exception("JWT Key is missing");
 }
 
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 .AddJwtBearer(options =>
 {
     options.TokenValidationParameters = new TokenValidationParameters
@@ -52,12 +49,17 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Swagger (ENABLE ALWAYS on Render for testing)
+app.UseSwagger();
+app.UseSwaggerUI();
+
+// Middleware
 app.UseCors("AllowAll");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Root route
+// Test route
 app.MapGet("/", () => "ManagePro Backend is Running 🚀");
 
 app.MapControllers();
@@ -66,9 +68,9 @@ app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
-    SeedData.InitializeAsync(services).Wait();
+    await SeedData.InitializeAsync(services);
 }
 
-// Port
+// PORT (IMPORTANT FOR RENDER)
 var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
 app.Run($"http://0.0.0.0:{port}");
