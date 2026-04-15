@@ -42,7 +42,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 });
 
 //
-// CORS (SAFE FOR NETLIFY + ANGULAR)
+// CORS (NETLIFY FRONTEND)
 //
 builder.Services.AddCors(options =>
 {
@@ -58,16 +58,13 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 //
-// SWAGGER (DEV ONLY)
+// SWAGGER (ENABLE ON BOTH DEV + RENDER FOR TESTING)
 //
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+app.UseSwagger();
+app.UseSwaggerUI();
 
 //
-// MIDDLEWARE ORDER (IMPORTANT)
+// MIDDLEWARE ORDER
 //
 app.UseCors("AllowFrontend");
 
@@ -75,7 +72,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-
 app.MapGet("/", () => "ManagePro Backend is Running 🚀");
 
 //
@@ -86,11 +82,5 @@ using (var scope = app.Services.CreateScope())
     var services = scope.ServiceProvider;
     await SeedData.InitializeAsync(services);
 }
-
-//
-// RENDER DEPLOY PORT
-//
-var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
-app.Urls.Add($"http://0.0.0.0:{port}");
 
 app.Run();
